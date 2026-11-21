@@ -1,1 +1,21 @@
+# Secrets and local configuration
 .env
+.streamlit/secrets.toml
+
+# Python environments and generated files
+venv/
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Local media and generated artifacts
+downloades/
+vector_db/
+*_converted.wav
+*_chunk_*.wav
+
+# macOS
+.DS_Store

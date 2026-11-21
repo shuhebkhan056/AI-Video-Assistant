@@ -1,5 +1,15 @@
-import whisper
 import os
+import ssl
+import certifi
+
+# The Python installation used by this project may not have its system CA
+# bundle installed. Whisper downloads model weights with urllib, so point
+# Python HTTPS requests at certifi's maintained CA bundle when needed.
+default_ca_file = ssl.get_default_verify_paths().cafile
+if not default_ca_file or not os.path.isfile(default_ca_file):
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+
+import whisper
 import requests
 from pydub import AudioSegment
 
@@ -8,7 +18,7 @@ from pydub import AudioSegment
 SARVAM_PIECE_SECONDS = 25
 
 
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 
 
 SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
@@ -103,21 +113,39 @@ def transcribe_chunk(chunk_path: str, language: str = "english") -> str:
     return transcribe_chunk_whisper(chunk_path)
 
 
-def transcribe_all(chunks: list, language: str = "english") -> str:
+def transcribe_all(chunks: list, language: str = "english", progress_callback=None) -> str:
+    if not chunks:
+        raise ValueError("No audio chunks were created. Check that the input contains audio.")
 
     full_transcript = "" 
 
     engine = "Sarvam AI" if language.lower() == "hinglish" else "Whisper"
     print(f"Using {engine} for transcription.")
 
+    if language.lower() != "hinglish":
+        if progress_callback:
+            progress_callback(f"Loading Whisper {WHISPER_MODEL} model on CPU. The first load can take a few minutes...")
+        load_model()
+
     for i, chunk in enumerate(chunks):  
 
         print(f"Transcribing chunk {i + 1}/{len(chunks)}...")
+
+        if progress_callback:
+            progress_callback(f"Transcribing audio chunk {i + 1}/{len(chunks)} with {engine}...")
 
         text = transcribe_chunk(chunk, language=language)  
 
         full_transcript += text + " "  
 
+        if progress_callback:
+            progress_callback(f"Finished audio chunk {i + 1}/{len(chunks)}.")
+
     print("Transcription complete.")
 
-    return full_transcript.strip()  
+    transcript = full_transcript.strip()
+    if not transcript:
+        raise ValueError(
+            "No speech was detected in the audio. Try a clearer recording or check the selected language."
+        )
+    return transcript

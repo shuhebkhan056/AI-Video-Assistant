@@ -1,13 +1,26 @@
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
+from html import escape
+import os
 import streamlit as st
 import time
-from dotenv import load_dotenv
+
+# Streamlit Community Cloud exposes configured values through st.secrets, while
+# the local app reads environment variables from .env. Bridge both interfaces.
+try:
+    cloud_secrets = st.secrets
+except Exception:
+    cloud_secrets = {}
+for secret_name in ("GEMINI_API_KEY", "GEMINI_MODEL", "SARVAM_API_KEY", "SARVAM_STT_MODEL", "WHISPER_MODEL"):
+    if secret_name in cloud_secrets:
+        os.environ.setdefault(secret_name, str(cloud_secrets[secret_name]))
+
 from utils.audio_processor import process_input
 from core.transcriber import transcribe_all
 from core.summarizer import summarize, generate_title
 from core.extractor import extract_action_items, extract_key_decisions, extract_questions
 from core.rag_engine import build_rag_chain, ask_question
-
-load_dotenv()
 
 # ─── Page Config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -380,28 +393,38 @@ if run_btn:
                 st.info("⚙️ Pipeline running — see sidebar for live status…")
 
             update_step("audio", "active")
+            progress_placeholder.info("🔊 Step 1/6: Downloading and preparing audio...")
             chunks = process_input(source)
             update_step("audio", "done")
 
             update_step("transcript", "active")
-            transcript = transcribe_all(chunks, language)
+            progress_placeholder.info(f"🎙️ Step 2/6: Starting transcription of {len(chunks)} audio chunk(s)...")
+            transcript = transcribe_all(
+                chunks,
+                language,
+                progress_callback=lambda status: progress_placeholder.info(f"🎙️ Step 2/6: {status}"),
+            )
             update_step("transcript", "done")
 
             update_step("title", "active")
+            progress_placeholder.info("🏷️ Step 3/6: Generating title with Gemini...")
             title = generate_title(transcript)
             update_step("title", "done")
 
             update_step("summary", "active")
+            progress_placeholder.info("📋 Step 4/6: Generating meeting summary with Gemini...")
             summary = summarize(transcript)
             update_step("summary", "done")
 
             update_step("extract", "active")
+            progress_placeholder.info("🔍 Step 5/6: Extracting action items and key decisions...")
             action_items  = extract_action_items(transcript)
             decisions     = extract_key_decisions(transcript)
             questions     = extract_questions(transcript)
             update_step("extract", "done")
 
             update_step("rag", "active")
+            progress_placeholder.info("🧠 Step 6/6: Building Chroma vector store for meeting Q&A...")
             rag_chain = build_rag_chain(transcript)
             update_step("rag", "done")
 
@@ -435,7 +458,7 @@ if st.session_state.result:
     <div class="card">
         <div class="card-title">📌 Session Title</div>
         <div style="font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:700;color:var(--text)">
-            {r['title']}
+            {escape(str(r['title']))}
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -446,12 +469,12 @@ if st.session_state.result:
         st.markdown(f"""
         <div class="card">
             <div class="card-title">📋 Summary</div>
-            <div class="card-content">{r['summary']}</div>
+            <div class="card-content">{escape(str(r['summary']))}</div>
         </div>""", unsafe_allow_html=True)
 
     with col2:
         with st.expander("📝 Full Transcript", expanded=False):
-            st.markdown(f'<div class="transcript-box">{r["transcript"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="transcript-box">{escape(str(r["transcript"]))}</div>', unsafe_allow_html=True)
 
     # Second row: action items | decisions | questions
     c1, c2, c3 = st.columns(3, gap="medium")
@@ -460,21 +483,21 @@ if st.session_state.result:
         st.markdown(f"""
         <div class="card">
             <div class="card-title">✅ Action Items</div>
-            <div class="card-content">{r['action_items']}</div>
+            <div class="card-content">{escape(str(r['action_items']))}</div>
         </div>""", unsafe_allow_html=True)
 
     with c2:
         st.markdown(f"""
         <div class="card">
             <div class="card-title">🔑 Key Decisions</div>
-            <div class="card-content">{r['key_decisions']}</div>
+            <div class="card-content">{escape(str(r['key_decisions']))}</div>
         </div>""", unsafe_allow_html=True)
 
     with c3:
         st.markdown(f"""
         <div class="card">
             <div class="card-title">❓ Open Questions</div>
-            <div class="card-content">{r['open_questions']}</div>
+            <div class="card-content">{escape(str(r['open_questions']))}</div>
         </div>""", unsafe_allow_html=True)
 
     st.markdown("---")
@@ -490,13 +513,13 @@ if st.session_state.result:
                 chat_html += f"""
                 <div class="chat-msg" style="align-items:flex-end">
                     <span class="chat-label user-label">You</span>
-                    <div class="chat-bubble user-bubble">{msg['content']}</div>
+                    <div class="chat-bubble user-bubble">{escape(str(msg['content']))}</div>
                 </div>"""
             else:
                 chat_html += f"""
                 <div class="chat-msg" style="align-items:flex-start">
                     <span class="chat-label bot-label">🤖 Assistant</span>
-                    <div class="chat-bubble bot-bubble">{msg['content']}</div>
+                    <div class="chat-bubble bot-bubble">{escape(str(msg['content']))}</div>
                 </div>"""
         chat_html += '</div>'
         st.markdown(chat_html, unsafe_allow_html=True)

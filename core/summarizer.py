@@ -1,13 +1,26 @@
-from langchain_mistralai import ChatMistralAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 
 import os 
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def get_llm():
-    return ChatMistralAI(model = "mistral-small-latest", mistral_api_key = os.getenv("MISTRAL_API_KEY"),temperature=0.3)
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if api_key:
+        api_key = api_key.strip().strip('"').strip("'")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY is missing in your .env file. Please add your Gemini API key from https://aistudio.google.com/app/apikey")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
+    return ChatGoogleGenerativeAI(
+        model=model,
+        google_api_key=api_key,
+        temperature=0.3,
+    )
 
 
 def split_transcript(transcript: str) -> list:
@@ -19,6 +32,9 @@ def split_transcript(transcript: str) -> list:
     return splitter.split_text(transcript)
 
 def summarize(transcript : str) -> str:
+    if not transcript or not transcript.strip():
+        raise ValueError("Cannot summarize an empty transcript. Check that speech was transcribed successfully.")
+
     llm = get_llm()
 
     map_prompt = ChatPromptTemplate.from_messages(
@@ -54,6 +70,9 @@ def summarize(transcript : str) -> str:
     return combined_chain.invoke(combined)
 
 def generate_title(transcipt : str) -> str:
+    if not transcipt or not transcipt.strip():
+        raise ValueError("Cannot generate a title from an empty transcript. Check that speech was transcribed successfully.")
+
     llm = get_llm()
 
     

@@ -1,14 +1,23 @@
 import os
-from langchain_mistralai import ChatMistralAI
+from dotenv import load_dotenv
+
+load_dotenv()
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from core.vector_store import build_vector_store, load_vector_store, get_retriever
 
 def get_llm():
-    return ChatMistralAI(
-        model="mistral-small-latest",
-        mistral_api_key=os.getenv("MISTRAL_API_KEY"),
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if api_key:
+        api_key = api_key.strip().strip('"').strip("'")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY is missing in your .env file. Please add your Gemini API key from https://aistudio.google.com/app/apikey")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
+    return ChatGoogleGenerativeAI(
+        model=model,
+        google_api_key=api_key,
         temperature=0.3,
     )
 
@@ -57,7 +66,7 @@ Context from meeting transcript:
 
 def load_rag_chain():
     vector_store = load_vector_store()
-    retriver = get_retriever()
+    retriever = get_retriever(vector_store)
 
     llm = get_llm()
     prompt = ChatPromptTemplate.from_messages([
@@ -79,7 +88,7 @@ Context from meeting transcript:
 
     rag_chain = (
         {
-            "context":  retriver| RunnableLambda(format_docs),
+            "context":  retriever | RunnableLambda(format_docs),
             "question": RunnablePassthrough(),
         }
         | prompt

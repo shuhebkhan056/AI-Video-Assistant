@@ -1,3 +1,4 @@
+import hashlib
 import os 
 from langchain_chroma import Chroma 
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -16,12 +17,21 @@ def get_embeddings():
 
 def build_vector_store(transcript : str)->Chroma:
     print("Building vector Store")
+    if not transcript or not transcript.strip():
+        raise ValueError("Cannot build meeting search: the transcript is empty. Run transcription first.")
+
+    # Keep each meeting in its own persistent collection. Reusing one fixed
+    # collection causes later meetings to retrieve chunks from earlier ones.
+    transcript_id = hashlib.sha256(transcript.encode("utf-8")).hexdigest()[:16]
+    collection_name = f"meeting_{transcript_id}"
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size = 500,
         chunk_overlap = 50
     )
-    chunks = splitter.split_text(transcript)
+    chunks = [chunk for chunk in splitter.split_text(transcript) if chunk.strip()]
+    if not chunks:
+        raise ValueError("Cannot build meeting search: the transcript contains no searchable text.")
 
     docs = [
         Document(page_content=chunk, metadata = {'chunk_index' : i})
@@ -32,7 +42,7 @@ def build_vector_store(transcript : str)->Chroma:
     vector_store = Chroma.from_documents(
         documents= docs,
         embedding=embeddings,
-        collection_name=COLLECTION_NAME,
+        collection_name=collection_name,
         persist_directory=CHROMA_DIR
     )
 
