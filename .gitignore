@@ -19,3 +19,6 @@ vector_db/
 
 # macOS
 .DS_Store
+
+# Private study notes
+interview-preparation/
