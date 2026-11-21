@@ -3,8 +3,10 @@ load_dotenv(override=True)
 
 from html import escape
 import os
+import tempfile
 import streamlit as st
 import time
+from pathlib import Path
 
 # Streamlit Community Cloud exposes configured values through st.secrets, while
 # the local app reads environment variables from .env. Bridge both interfaces.
@@ -350,6 +352,11 @@ with st.sidebar:
 
     st.markdown('<span class="badge badge-purple">Input</span>', unsafe_allow_html=True)
     source = st.text_input("YouTube URL or File Path", placeholder="https://youtube.com/watch?v=... or /path/to/file.mp4")
+    uploaded_file = st.file_uploader(
+        "Or upload an audio/video file",
+        type=["wav", "mp3", "m4a", "aac", "flac", "ogg", "mp4", "webm", "mov", "mkv"],
+        help="Use this option when a hosted server cannot download a YouTube video.",
+    )
 
     language = st.selectbox("Language", ["english", "hinglish"], index=0)
 
@@ -375,8 +382,10 @@ st.markdown("---")
 
 # ── Run Pipeline ────────────────────────────────────────────────────────────────
 if run_btn:
-    if not source.strip():
-        st.error("Please enter a YouTube URL or file path.")
+    if not source.strip() and uploaded_file is None:
+        st.error("Enter a YouTube URL or file path, or upload an audio/video file.")
+    elif source.strip() and uploaded_file is not None:
+        st.error("Choose either a URL/path or an uploaded file, not both.")
     else:
         st.session_state.pipeline_done = False
         st.session_state.result = None
@@ -388,13 +397,27 @@ if run_btn:
         def update_step(key, state):
             st.session_state.pipeline_steps[key] = state
 
+        audio_artifacts = []
+        upload_path = None
         try:
+            input_source = source.strip()
+            if uploaded_file is not None:
+                suffix = Path(uploaded_file.name).suffix or ".mp4"
+                with tempfile.NamedTemporaryFile(prefix="ai_video_upload_", suffix=suffix, delete=False) as temp_file:
+                    temp_file.write(uploaded_file.getbuffer())
+                    upload_path = temp_file.name
+                input_source = upload_path
+                audio_artifacts.append(upload_path)
+
             with progress_placeholder.container():
                 st.info("⚙️ Pipeline running — see sidebar for live status…")
 
             update_step("audio", "active")
-            progress_placeholder.info("🔊 Step 1/6: Downloading and preparing audio...")
-            chunks = process_input(source)
+            progress_placeholder.info("🔊 Step 1/6: Preparing the selected audio/video...")
+            chunks = process_input(input_source)
+            audio_artifacts.extend(chunks)
+            if chunks:
+                audio_artifacts.append(chunks[0].rsplit("_chunk_", 1)[0])
             update_step("audio", "done")
 
             update_step("transcript", "active")
@@ -447,7 +470,20 @@ if run_btn:
             for k in ["audio","transcript","title","summary","extract","rag"]:
                 if st.session_state.pipeline_steps.get(k) == "active":
                     st.session_state.pipeline_steps[k] = "pending"
-            progress_placeholder.error(f"❌ Error: {e}")
+            if "403" in str(e) and source.strip().startswith(("http://", "https://")):
+                progress_placeholder.error(
+                    "❌ YouTube denied the hosted download (HTTP 403). Upload the audio/video file instead; "
+                    "the Streamlit Cloud server may not be allowed to download from YouTube."
+                )
+            else:
+                progress_placeholder.error(f"❌ Error: {e}")
+        finally:
+            for path in set(audio_artifacts):
+                try:
+                    if os.path.isfile(path):
+                        os.remove(path)
+                except OSError:
+                    pass
 
 # ── Results ──────────────────────────────────────────────────────────────────────
 if st.session_state.result:
