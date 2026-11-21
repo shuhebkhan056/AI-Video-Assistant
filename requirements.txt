@@ -3,6 +3,7 @@
 
 # ── Audio / Video acquisition ─────────────────────────────────────────────────
 yt-dlp>=2024.4.9                  # Download audio from YouTube URLs
+youtube-transcript-api>=1.2.4     # Use available YouTube captions before downloading audio
 pydub>=0.25.1                     # Audio file manipulation / format conversion
 audioop-lts>=0.2.1; python_version >= '3.13'  # Required for pydub on Python >= 3.13
 ffmpeg-python>=0.2.0              # FFmpeg bindings (FFmpeg binary must be installed separately)

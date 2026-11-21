@@ -19,6 +19,7 @@ for secret_name in ("GEMINI_API_KEY", "GEMINI_MODEL", "SARVAM_API_KEY", "SARVAM_
         os.environ.setdefault(secret_name, str(cloud_secrets[secret_name]))
 
 from utils.audio_processor import process_input
+from utils.youtube_transcript import fetch_youtube_captions
 from core.transcriber import transcribe_all
 from core.summarizer import summarize, generate_title
 from core.extractor import extract_action_items, extract_key_decisions, extract_questions
@@ -413,20 +414,32 @@ if run_btn:
                 st.info("⚙️ Pipeline running — see sidebar for live status…")
 
             update_step("audio", "active")
-            progress_placeholder.info("🔊 Step 1/6: Preparing the selected audio/video...")
-            chunks = process_input(input_source)
-            audio_artifacts.extend(chunks)
-            if chunks:
-                audio_artifacts.append(chunks[0].rsplit("_chunk_", 1)[0])
+            transcript = None
+            chunks = []
+            if input_source.startswith(("http://", "https://")):
+                progress_placeholder.info("🔊 Step 1/6: Checking for available YouTube captions...")
+                transcript = fetch_youtube_captions(input_source, language)
+
+            if transcript:
+                progress_placeholder.info("🔊 Step 1/6: Using the video's available captions.")
+            else:
+                progress_placeholder.info("🔊 Step 1/6: Preparing audio for transcription...")
+                chunks = process_input(input_source)
+                audio_artifacts.extend(chunks)
+                if chunks:
+                    audio_artifacts.append(chunks[0].rsplit("_chunk_", 1)[0])
             update_step("audio", "done")
 
             update_step("transcript", "active")
-            progress_placeholder.info(f"🎙️ Step 2/6: Starting transcription of {len(chunks)} audio chunk(s)...")
-            transcript = transcribe_all(
-                chunks,
-                language,
-                progress_callback=lambda status: progress_placeholder.info(f"🎙️ Step 2/6: {status}"),
-            )
+            if transcript:
+                progress_placeholder.info("🎙️ Step 2/6: Captions loaded; continuing with analysis...")
+            else:
+                progress_placeholder.info(f"🎙️ Step 2/6: Starting transcription of {len(chunks)} audio chunk(s)...")
+                transcript = transcribe_all(
+                    chunks,
+                    language,
+                    progress_callback=lambda status: progress_placeholder.info(f"🎙️ Step 2/6: {status}"),
+                )
             update_step("transcript", "done")
 
             update_step("title", "active")

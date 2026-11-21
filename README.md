@@ -16,7 +16,7 @@ streamlit run app.py
 
 Add a Gemini API key to `.env` as `GEMINI_API_KEY`. `SARVAM_API_KEY` is optional and is only needed for the Hinglish transcription option. Whisper downloads its selected model the first time it runs; `WHISPER_MODEL=base` is the default.
 
-For local-file analysis, enter a path visible to the machine running Streamlit. When hosted, use the file uploader to send a recording from your computer; local paths are not available to the server. YouTube may deny downloads from cloud-hosted IP addresses, so uploading the audio/video is the fallback when a URL returns HTTP 403.
+For local-file analysis, enter a path visible to the machine running Streamlit. When hosted, use the file uploader to send a recording from your computer; local paths are not available to the server. For YouTube URLs, the app tries available English captions before downloading audio. YouTube may block both requests from cloud-hosted IP addresses, so upload the audio/video if the hosted request is denied.
 
 ## Deploy on Streamlit Community Cloud
 
