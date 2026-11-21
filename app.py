@@ -14,12 +14,12 @@ try:
     cloud_secrets = st.secrets
 except Exception:
     cloud_secrets = {}
-for secret_name in ("GEMINI_API_KEY", "GEMINI_MODEL", "SARVAM_API_KEY", "SARVAM_STT_MODEL", "WHISPER_MODEL"):
+for secret_name in ("GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_VIDEO_MODEL", "SARVAM_API_KEY", "SARVAM_STT_MODEL", "WHISPER_MODEL"):
     if secret_name in cloud_secrets:
         os.environ.setdefault(secret_name, str(cloud_secrets[secret_name]))
 
 from utils.audio_processor import process_input
-from utils.youtube_transcript import fetch_youtube_captions
+from utils.youtube_transcript import fetch_youtube_captions, transcribe_youtube_with_gemini
 from core.transcriber import transcribe_all
 from core.summarizer import summarize, generate_title
 from core.extractor import extract_action_items, extract_key_decisions, extract_questions
@@ -417,11 +417,14 @@ if run_btn:
             transcript = None
             chunks = []
             if input_source.startswith(("http://", "https://")):
-                progress_placeholder.info("🔊 Step 1/6: Checking for available YouTube captions...")
-                transcript = fetch_youtube_captions(input_source, language)
+                progress_placeholder.info("🔊 Step 1/6: Sending the public YouTube URL to Gemini...")
+                transcript = transcribe_youtube_with_gemini(input_source, language)
+                if not transcript:
+                    progress_placeholder.info("🔊 Step 1/6: Checking for available YouTube captions...")
+                    transcript = fetch_youtube_captions(input_source, language)
 
             if transcript:
-                progress_placeholder.info("🔊 Step 1/6: Using the video's available captions.")
+                progress_placeholder.info("🔊 Step 1/6: Transcript obtained; continuing with analysis.")
             else:
                 progress_placeholder.info("🔊 Step 1/6: Preparing audio for transcription...")
                 chunks = process_input(input_source)
@@ -432,7 +435,7 @@ if run_btn:
 
             update_step("transcript", "active")
             if transcript:
-                progress_placeholder.info("🎙️ Step 2/6: Captions loaded; continuing with analysis...")
+                progress_placeholder.info("🎙️ Step 2/6: Transcript ready; continuing with analysis...")
             else:
                 progress_placeholder.info(f"🎙️ Step 2/6: Starting transcription of {len(chunks)} audio chunk(s)...")
                 transcript = transcribe_all(
